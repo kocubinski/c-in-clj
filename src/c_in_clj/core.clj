@@ -98,7 +98,14 @@
         s
         (recur more)))))
 
-(defrecord Package [package-name module declarations public-symbols public-types private-symbols private-types referenced-packages]
+(defrecord Package [package-name
+                    module
+                    declarations
+                    public-symbols
+                    public-types
+                    private-symbols
+                    private-types
+                    referenced-packages]
   clojure.lang.Named
   (getName [_] package-name)
   IPackage

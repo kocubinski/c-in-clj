@@ -54,8 +54,10 @@
       "bool" Boolean
       "size_t" UIntPtr
       "char*" String
-      (when (is-reference-type? ctype)
-        IntPtr))))
+      (cond
+       (is-reference-type? ctype) IntPtr
+       (= c_in_clj.core.EnumType (type ctype)) (get-clr-type
+                                                (-> ctype :values first :base-type))))))
 
 (defn get-clr-params [params]
   (map (comp get-clr-type get-type) params))
@@ -162,10 +164,10 @@
  [{:keys [compiled-symbols]} decl]
  (when *dynamic-compile*
    (let [sym-name (name decl)
-   ;;      {:keys [fn-ptr-ptr cur-decl]} (get @compiled-symbols sym-name)
-   ;;      fn-type (get-type @cur-decl)
-         ;(str "(*(" cret "(**)(" param-sig "))" fn-ptr-ptr ")")
-         ;fn-def (str "#define " fn-name " " fn-const "\n")
+         ;;      {:keys [fn-ptr-ptr cur-decl]} (get @compiled-symbols sym-name)
+         ;;      fn-type (get-type @cur-decl)
+                                        ;(str "(*(" cret "(**)(" param-sig "))" fn-ptr-ptr ")")
+                                        ;fn-def (str "#define " fn-name " " fn-const "\n")
          ]
      ;; (println fn-type)
      (println sym-name)
@@ -227,6 +229,29 @@
         #'create-msvc-compile-context
         #'create-dll-loader
         ~opts))))
+
+;; emit C#
+(defn write-dll-import [func-decl dll-name]
+  (println "Writing" (name func-decl))
+  (let [ret-type (-> func-decl :function-type :return-type get-clr-type)
+        param-types (map #(-> % :param-type (or :target-type :param-type) get-clr-type)
+                         (-> func-decl :function-type :params))
+        params (map #(str % " " %2) param-types "abcdefgh")]
+    (str "        [DllImport(\"" dll-name "\")]\n" 
+         "        public static extern " ret-type " " (name func-decl) "("
+         (clojure.string/join ", " params) ");")))
+
+(defn write-package-dll-import-wrapper [package output-filename namespace dll-name]
+  (let [func-decls (filter #(= (type %) c_in_clj.core.FunctionDeclaration)
+                           @(:declarations package))
+        print-fn (fn [tabs content] (println content))
+        preamble (str "using System;\n" 
+                      "namespace " namespace "\n{\n"
+                      "    public static class " (name package) "\n"
+                      "    {\n")
+        pinvokes (str/join "\n\n" (map #(write-dll-import % dll-name) func-decls))
+        ending (str "\n    }\n}")]
+    (spit output-filename (str preamble pinvokes ending))))
 
 (msvc-module TestMsvcModule :dev true)
 
