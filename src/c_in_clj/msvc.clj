@@ -233,10 +233,18 @@
 ;; emit C#
 (defn write-dll-import [func-decl dll-name]
   (println "Writing" (name func-decl))
-  (let [ret-type (-> func-decl :function-type :return-type get-clr-type)
+  (let [get-type-str (fn [param-type]
+                       (let [type (str  (get-clr-type param-type))]
+                         (if (.StartsWith type "System.")
+                           (.Substring type 7)
+                           type)))
+        ret-type (-> func-decl :function-type :return-type get-type-str)
         param-types (map #(-> % :param-type (or :target-type :param-type) get-clr-type)
                          (-> func-decl :function-type :params))
-        params (map #(str % " " %2) param-types "abcdefgh")]
+        ;;params (map #(str % " " %2) param-types "abcdefgh")
+        params (map #(str (-> % :param-type (or :target-type :param-type) get-type-str)
+                          " " (:param-name %))
+                    (-> func-decl :function-type :params))]
     (str "        [DllImport(\"" dll-name "\")]\n" 
          "        public static extern " ret-type " " (name func-decl) "("
          (clojure.string/join ", " params) ");")))
@@ -245,7 +253,8 @@
   (let [func-decls (filter #(= (type %) c_in_clj.core.FunctionDeclaration)
                            @(:declarations package))
         print-fn (fn [tabs content] (println content))
-        preamble (str "using System;\n" 
+        preamble (str "using System;\n"
+                      "using System.Runtime.InteropServices;\n\n" 
                       "namespace " namespace "\n{\n"
                       "    public static class " (name package) "\n"
                       "    {\n")
